@@ -217,7 +217,7 @@ const WorkflowBuilder = () => {
         ...currentWorkflow.steps,
         {
           id: `action-${Date.now()}`,
-          type: "action",
+          type: "action" as const,
           service: "Select Service",
           event: "Select Event",
           description: "Configure this action",
@@ -227,7 +227,7 @@ const WorkflowBuilder = () => {
 
     setCurrentWorkflow(updatedWorkflow);
 
-    // Update the workflow in the workflows array
+    // Update theit workflow in the workflows array
     const updatedWorkflows = workflows.map((w) =>
       w.id === currentWorkflow.id ? updatedWorkflow : w,
     );

@@ -158,22 +158,19 @@ export default function DashboardLayout({
                   <InformationPanel
                     title="Calendar Events"
                     type="calendar"
-                    height="md"
                   />
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InformationPanel title="Tasks" type="tasks" height="sm" />
+                    <InformationPanel title="Tasks" type="task" />
                     <InformationPanel
                       title="Email Summary"
                       type="email"
-                      height="sm"
                     />
                   </div>
 
                   <InformationPanel
                     title="Notifications"
-                    type="notifications"
-                    height="sm"
+                    type="notification"
                   />
                 </>
               )}
@@ -182,7 +179,6 @@ export default function DashboardLayout({
                 <InformationPanel
                   title="Email Management"
                   type="email"
-                  height="full"
                 />
               )}
 

@@ -141,33 +141,64 @@ export default function Dashboard() {
                 {/* Calendar Events Panel */}
                 <InformationPanel
                   title="Calendar Events"
-                  icon={<Calendar className="h-5 w-5" />}
-                  data={calendarEvents}
+                  items={calendarEvents.map(event => ({
+                    id: event.id.toString(),
+                    title: event.title,
+                    time: event.time,
+                    date: undefined,
+                    status: undefined,
+                    source: undefined,
+                    type: "calendar"
+                  }))}
                   type="calendar"
                 />
 
                 {/* Tasks Panel */}
                 <InformationPanel
                   title="Tasks"
-                  icon={<CheckSquare className="h-5 w-5" />}
-                  data={tasks}
-                  type="tasks"
+                  items={tasks.map(task => ({
+                    id: task.id.toString(),
+                    title: task.title,
+                    description: undefined,
+                    date: undefined,
+                    time: undefined,
+                    status: task.priority === "High" ? "urgent" : (task.priority === "Medium" ? "pending" : "info"),
+                    source: undefined,
+                    type: "task"
+                  }))}
+                  type="task"
                 />
 
                 {/* Emails Panel */}
                 <InformationPanel
                   title="Recent Emails"
-                  icon={<Mail className="h-5 w-5" />}
-                  data={emails}
-                  type="emails"
+                  items={emails.map(email => ({
+                    id: email.id.toString(),
+                    title: email.subject,
+                    description: `From: ${email.sender}`,
+                    date: undefined,
+                    time: email.time,
+                    status: email.unread ? "pending" : "completed",
+                    source: undefined,
+                    type: "email"
+                  }))}
+                  type="email"
                 />
 
                 {/* Notifications Panel */}
                 <InformationPanel
                   title="Notifications"
-                  icon={<Bell className="h-5 w-5" />}
-                  data={notifications}
-                  type="notifications"
+                  items={notifications.map(notification => ({
+                    id: notification.id.toString(),
+                    title: notification.message,
+                    description: undefined,
+                    date: undefined,
+                    time: notification.time,
+                    status: undefined,
+                    source: notification.source,
+                    type: "notification"
+                  }))}
+                  type="notification"
                 />
               </div>
             </TabsContent>
