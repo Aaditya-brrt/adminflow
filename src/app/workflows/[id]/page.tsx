@@ -1,14 +1,15 @@
 "use client";
 
+import React from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { useRouter } from "next/navigation";
 
-export default function WorkflowDetailPage({ params }: { params: { id: string } }) {
-  // TODO: Fetch workflow by params.id
+export default function WorkflowDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
+  // TODO: Fetch workflow by id
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-4">Workflow Detail: {params.id}</h1>
+        <h1 className="text-2xl font-bold mb-4">Workflow Detail: {id}</h1>
         {/* Overview Panel */}
         <section className="mb-6">
           <h2 className="font-semibold mb-2">Overview</h2>
