@@ -59,16 +59,23 @@ export default function DashboardLayout({
             </li>
           </ul>
         </nav>
-        <div className="p-4 mt-auto">
-          <div className="flex items-center">
-            <Avatar>
-              <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback>JD</AvatarFallback>
-            </Avatar>
-            <div className="ml-2 overflow-hidden">
-              <p className="text-sm font-medium truncate">{user.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                <div className="p-4 mt-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Avatar>
+                <AvatarImage src={user.avatar} alt={user.name} />
+                <AvatarFallback>JD</AvatarFallback>
+              </Avatar>
+              <div className="ml-2 overflow-hidden">
+                <p className="text-sm font-medium truncate">{user.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              </div>
             </div>
+            <form action="/auth/logout" method="post">
+              <Button variant="ghost" size="sm" type="submit">
+                Logout
+              </Button>
+            </form>
           </div>
         </div>
       </div>
@@ -83,6 +90,14 @@ export default function DashboardLayout({
               <span className="absolute top-0 right-0 h-4 w-4 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">3</span>
             </Button>
             <Button variant="outline">Connect Services</Button>
+            <div className="flex items-center space-x-2">
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/auth/login">Login</Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link href="/auth/signup">Sign Up</Link>
+              </Button>
+            </div>
           </div>
         </header>
         {/* Main dashboard content */}
