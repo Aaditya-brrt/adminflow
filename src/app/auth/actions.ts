@@ -174,3 +174,38 @@ export async function logout() {
   revalidatePath('/', 'layout')
   redirect('/')
 } 
+
+export async function signInWithGoogleAction() {
+  "use server";
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { headers } = await import("next/headers");
+  const headersList = await headers();
+  const origin = headersList.get("origin");
+
+  console.log("[Google SignIn] origin:", origin);
+
+  if (!origin) {
+    return (await import("next/navigation")).redirect("/auth/login?error=OriginMissing");
+  }
+
+  const redirectTo = `${origin}/auth/callback`;
+  console.log("[Google SignIn] redirectTo:", redirectTo);
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+    },
+  });
+
+  if (error) {
+    return (await import("next/navigation")).redirect(`/auth/login?error=OAuthSigninFailed&message=${encodeURIComponent(error.message)}`);
+  }
+
+  if (data?.url) {
+    return (await import("next/navigation")).redirect(data.url);
+  }
+
+  return (await import("next/navigation")).redirect("/auth/login?error=OAuthConfigurationError");
+} 

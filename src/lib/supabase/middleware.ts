@@ -27,12 +27,6 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // IMPORTANT: Avoid writing any logic between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
-
-  // IMPORTANT: DO NOT REMOVE auth.getUser()
-
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -44,25 +38,26 @@ export async function updateSession(request: NextRequest) {
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
   // Define auth routes (login, signup, etc.)
-  const authRoutes = ['/auth/login', '/auth/signup', '/auth/check-email']
+  const authRoutes = ['/auth/login', '/auth/signup', '/auth/check-email', '/auth/callback']
   const isAuthRoute = authRoutes.some(route => pathname === route)
+
+  // Logging for debugging
+  console.log('[Middleware] Path:', pathname, 'User:', user ? user.id : null)
 
   // If user is authenticated
   if (user) {
-    // Redirect authenticated users away from auth pages to dashboard
     if (isAuthRoute) {
+      console.log('[Middleware] Authenticated user, redirecting from auth route to /dashboard')
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)
     }
-
-    // Allow authenticated users to access protected routes
     if (isProtectedRoute) {
+      console.log('[Middleware] Authenticated user, accessing protected route')
       return supabaseResponse
     }
-
-    // Redirect authenticated users from landing page to dashboard
     if (pathname === '/') {
+      console.log('[Middleware] Authenticated user, redirecting from / to /dashboard')
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)
@@ -71,36 +66,21 @@ export async function updateSession(request: NextRequest) {
 
   // If user is not authenticated
   if (!user) {
-    // Redirect unauthenticated users away from protected routes to landing page
     if (isProtectedRoute) {
+      console.log('[Middleware] Unauthenticated user, redirecting from protected route to /')
       const url = request.nextUrl.clone()
       url.pathname = '/'
       return NextResponse.redirect(url)
     }
-
-    // Allow unauthenticated users to access auth pages and landing page
     if (isAuthRoute || pathname === '/') {
+      console.log('[Middleware] Unauthenticated user, accessing auth or landing page')
       return supabaseResponse
     }
-
-    // For any other routes, redirect to landing page
+    console.log('[Middleware] Unauthenticated user, redirecting to /')
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
-
-  // IMPORTANT: You *must* return the supabaseResponse object as it is.
-  // If you're creating a new response object with NextResponse.next() make sure to:
-  // 1. Pass the request in it, like so:
-  //    const myNewResponse = NextResponse.next({ request })
-  // 2. Copy over the cookies, like so:
-  //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())
-  // 3. Change the myNewResponse object to fit your needs, but avoid changing
-  //    the cookies!
-  // 4. Finally:
-  //    return myNewResponse
-  // If this is not done, you may be causing the browser and server to go out
-  // of sync and terminate the user's session prematurely!
 
   return supabaseResponse
 } 
