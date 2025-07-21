@@ -292,7 +292,7 @@ export default function LandingPage() {
           </div>
           
           <div className="border-t border-border/40 mt-8 pt-8 text-center text-sm text-muted-foreground">
-            © 2024 AdminFlow. All rights reserved.
+            © 2025 AdminFlow. All rights reserved.
           </div>
         </div>
       </footer>
