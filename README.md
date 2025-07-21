@@ -1,5 +1,5 @@
 # AdminFlow
-## Inspired by usedash.ai
+> Inspired by usedash.ai
 
 ## Project Overview
 
