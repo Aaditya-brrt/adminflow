@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Bell, Calendar, Mail, Menu, Settings, X } from "lucide-react";
+import { Bell, Calendar, Mail, Menu, Settings, X, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -9,6 +9,7 @@ import AIAssistant from "./AIAssistant";
 import InformationPanel from "./InformationPanel";
 import WorkflowBuilder from "./WorkflowBuilder";
 import Link from "next/link";
+import { ConnectServicesButton } from "./ConnectServicesButton";
 
 interface DashboardLayoutProps {
   children?: React.ReactNode;
@@ -36,7 +37,7 @@ export default function DashboardLayout({
             <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold">A</span>
             </div>
-            <span className="ml-2 font-bold text-lg">AdminFlow</span>
+              <span className="ml-2 font-bold text-lg">AdminFlow</span>
           </div>
         </div>
         <Separator />
@@ -59,21 +60,22 @@ export default function DashboardLayout({
             </li>
           </ul>
         </nav>
-                <div className="p-4 mt-auto">
+        <div className="p-4 mt-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <Avatar>
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback>JD</AvatarFallback>
-              </Avatar>
+            <Avatar>
+              <AvatarImage src={user.avatar} alt={user.name} />
+              <AvatarFallback>JD</AvatarFallback>
+            </Avatar>
               <div className="ml-2 overflow-hidden">
                 <p className="text-sm font-medium truncate">{user.name}</p>
                 <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
             </div>
             <form action="/auth/logout" method="post">
-              <Button variant="ghost" size="sm" type="submit">
-                Logout
+              <Button variant="ghost" size="sm" type="submit" className="p-2">
+                <LogOut className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">Logout</span>
               </Button>
             </form>
           </div>
@@ -89,7 +91,8 @@ export default function DashboardLayout({
               <Bell size={18} />
               <span className="absolute top-0 right-0 h-4 w-4 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">3</span>
             </Button>
-            <Button variant="outline">Connect Services</Button>
+            {/* Replace the old Connect Services button with the new one */}
+            <ConnectServicesButton />
             <div className="flex items-center space-x-2">
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/auth/login">Login</Link>

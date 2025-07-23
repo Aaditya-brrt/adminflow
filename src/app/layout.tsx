@@ -23,6 +23,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <Script src="https://api.tempolabs.ai/proxy-asset?url=https://storage.googleapis.com/tempo-public-assets/error-handling.js" />
       <body className={inter.className}>
+        <div id="modal-root"></div>
         {children}
         <StagewiseToolbar config={{ plugins: [ReactPlugin] }} />
         <TempoInit />
