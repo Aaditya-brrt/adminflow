@@ -1,15 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
-import { Bell, Calendar, Mail, Menu, Settings, X, LogOut } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Bell, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import AIAssistant from "./AIAssistant";
-import InformationPanel from "./InformationPanel";
-import WorkflowBuilder from "./WorkflowBuilder";
 import Link from "next/link";
 import { ConnectServicesButton } from "./ConnectServicesButton";
+import { createClient } from "@/lib/supabase/client";
 
 interface DashboardLayoutProps {
   children?: React.ReactNode;
@@ -18,12 +16,22 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({
   children,
 }: DashboardLayoutProps = {}) {
-  // Mock user data
-  const user = {
-    name: "John Doe",
-    email: "john.doe@example.com",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=john",
-  };
+    const [user, setUser] = useState<{ name: string; email: string; avatar: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUser({
+          name: user.user_metadata?.full_name || user.email || 'Unknown',
+          email: user.email || 'No email',
+          avatar: user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`
+        });
+      }
+      setLoading(false);
+    });
+  }, []);
 
   // Mock notification count
   const notificationCount = 3;
@@ -64,12 +72,24 @@ export default function DashboardLayout({
           <div className="flex items-center justify-between">
             <div className="flex items-center">
             <Avatar>
+              {user ? (
               <AvatarImage src={user.avatar} alt={user.name} />
+            ) : (
+              <AvatarFallback>{loading ? '...' : '?'}</AvatarFallback>
+            )}
               <AvatarFallback>JD</AvatarFallback>
             </Avatar>
               <div className="ml-2 overflow-hidden">
-                <p className="text-sm font-medium truncate">{user.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                {user ? (
+                  <>
+                    <p className="text-sm font-medium truncate">{user.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground truncate">
+                    {loading ? 'Loading...' : 'Not authenticated'}
+                  </p>
+                )}
               </div>
             </div>
             <form action="/auth/logout" method="post">
@@ -93,14 +113,6 @@ export default function DashboardLayout({
             </Button>
             {/* Replace the old Connect Services button with the new one */}
             <ConnectServicesButton />
-            <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/auth/login">Login</Link>
-              </Button>
-              <Button size="sm" asChild>
-                <Link href="/auth/signup">Sign Up</Link>
-              </Button>
-            </div>
           </div>
         </header>
         {/* Main dashboard content */}
