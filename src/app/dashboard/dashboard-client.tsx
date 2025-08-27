@@ -2,6 +2,7 @@
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import AIAssistant from "@/components/dashboard/AIAssistant";
+import { IntegrationStatus } from "@/components/dashboard/IntegrationStatus";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 
@@ -95,7 +96,10 @@ export default function DashboardClient() {
       <div className="flex flex-col lg:flex-row w-full h-full gap-4 p-6 max-w-7xl mx-auto">
         <div className="flex-1 flex flex-col gap-4">
           <MetricCards />
-          <RecentActivity />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <IntegrationStatus />
+            <RecentActivity />
+          </div>
           <AgentCollaborationSnapshot />
           <QuickActions />
         </div>

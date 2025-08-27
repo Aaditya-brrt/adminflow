@@ -1,208 +1,139 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Calendar, Mail, X } from "lucide-react";
+import { Calendar, Clock, Mail, Zap } from "lucide-react";
 
 export default function WorkflowDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
-  const router = useRouter();
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [automationType, setAutomationType] = useState("schedule");
-  const [scheduleFrequency, setScheduleFrequency] = useState("every");
-  const [scheduleInterval, setScheduleInterval] = useState("day");
-  const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [automationType, setAutomationType] = useState<"schedule" | "trigger">("schedule");
 
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Create New Workflow</h1>
-          <Button variant="ghost" size="icon" onClick={() => router.push("/workflows")}>
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
+        <div className="bg-card border border-border rounded-lg p-6 shadow-lg">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-foreground">Create New Workflow</h1>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <span className="sr-only">Close</span>
+              ×
+            </Button>
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Title Section */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Title</label>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter workflow title"
-                className="w-full"
-              />
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Content */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Title Input */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Title
+                </label>
+                <Input
+                  placeholder="Enter workflow title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full"
+                />
+              </div>
 
-            {/* Prompt Section - Now Much Larger */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Prompt</label>
-              <Textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Enter the specific prompt/instructions for the AI..."
-                className="w-full min-h-[300px] resize-none"
-              />
-            </div>
-
-            {/* Integrations Section */}
-            <div>
-              <h3 className="font-semibold mb-3">Connected Services</h3>
-              <div className="flex gap-2 mb-4">
-                <Badge variant="secondary" className="flex items-center gap-1">
-                  <Mail className="h-3 w-3" />
-                  Gmail (read)
-                </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1">
-                  Slack (write)
-                </Badge>
-                <Button variant="outline" size="sm">
-                  + Add Integration
-                </Button>
+              {/* Prompt Input */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Prompt
+                </label>
+                <Textarea
+                  placeholder="Enter the specific prompt/instructions for the AI..."
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="w-full min-h-[120px] resize-none"
+                />
               </div>
             </div>
 
-            {/* Execution Schema & Debug */}
-            <section>
-              <h3 className="font-semibold mb-3">Execution Schema & Debug</h3>
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-muted-foreground">(Step breakdown placeholder)</p>
-                </CardContent>
-              </Card>
-              <Card className="mt-2">
-                <CardContent className="p-4">
-                  <p className="text-muted-foreground">(Logs & run history placeholder)</p>
-                </CardContent>
-              </Card>
-            </section>
-
-            {/* Collaboration Settings */}
-            <section>
-              <h3 className="font-semibold mb-3">Collaboration Settings</h3>
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-muted-foreground">(Linked workflows/permissions placeholder)</p>
-                </CardContent>
-              </Card>
-            </section>
-          </div>
-
-          {/* Right Column - Automation Type */}
-          <div className="lg:col-span-1">
-            <Card className="sticky top-6">
-              <CardContent className="p-6">
-                <h3 className="font-semibold mb-4">Automation Type</h3>
-                
-                {/* Automation Type Tabs */}
-                <div className="flex mb-4 bg-muted rounded-lg p-1">
+            {/* Right Sidebar */}
+            <div className="space-y-6">
+              {/* Automation Type */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-3">
+                  Automation Type
+                </label>
+                <div className="space-y-2">
                   <button
                     onClick={() => setAutomationType("schedule")}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm transition-colors ${
+                    className={`w-full flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                       automationType === "schedule"
-                        ? "bg-background shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                        ? "bg-primary text-primary-foreground border-b-2 border-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-accent"
                     }`}
                   >
                     <Calendar className="h-4 w-4" />
-                    Schedule-based
+                    <span>Schedule-based</span>
                   </button>
                   <button
                     onClick={() => setAutomationType("trigger")}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm transition-colors ${
+                    className={`w-full flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                       automationType === "trigger"
-                        ? "bg-background shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                        ? "bg-primary text-primary-foreground border-b-2 border-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-accent"
                     }`}
                   >
                     <Mail className="h-4 w-4" />
-                    Trigger-based
+                    <span>Trigger-based</span>
                   </button>
                 </div>
+              </div>
 
-                {/* Schedule Configuration */}
-                {automationType === "schedule" && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-4 w-4" />
-                      <span>Run</span>
-                      <Select value={scheduleFrequency} onValueChange={setScheduleFrequency}>
-                        <SelectTrigger className="w-20">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="every">every</SelectItem>
-                          <SelectItem value="once">once</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={scheduleInterval} onValueChange={setScheduleInterval}>
-                        <SelectTrigger className="w-20">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="day">day</SelectItem>
-                          <SelectItem value="week">week</SelectItem>
-                          <SelectItem value="month">month</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <span>at</span>
-                      <Input
-                        type="time"
-                        value={scheduleTime}
-                        onChange={(e) => setScheduleTime(e.target.value)}
-                        className="w-24"
-                      />
-                    </div>
+              {/* Schedule Details */}
+              {automationType === "schedule" && (
+                <div className="bg-muted/50 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 text-sm">
+                    <Calendar className="h-4 w-4" />
+                    <span>Run every day at 09:00 AM</span>
                   </div>
-                )}
-
-                {/* Trigger Configuration */}
-                {automationType === "trigger" && (
-                  <div className="space-y-4">
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select trigger type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="email">New Email</SelectItem>
-                        <SelectItem value="webhook">Webhook</SelectItem>
-                        <SelectItem value="crm">Upserted CRM Record</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="mt-2 flex items-center space-x-2 text-xs text-muted-foreground">
+                    <span>every</span>
+                    <select className="bg-background border border-border rounded px-2 py-1">
+                      <option>day</option>
+                      <option>week</option>
+                      <option>month</option>
+                    </select>
+                    <span>at</span>
+                    <Clock className="h-3 w-3" />
+                    <span>09:00 AM</span>
                   </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex gap-2 mt-8">
-                  <Button variant="outline" className="flex-1">
-                    Cancel
-                  </Button>
-                  <Button className="flex-1">
-                    Create Workflow
-                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              )}
 
-        {/* Bottom Action Bar - Alternative to sidebar buttons */}
-        <div className="flex gap-2 mt-8 pt-6 border-t">
-          <Button variant="outline">Save Draft</Button>
-          <Button variant="secondary">Test Run</Button>
-          <Button>Publish</Button>
+              {/* Integrations */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Integrations
+                </label>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2 bg-muted rounded p-2">
+                    <Mail className="h-4 w-4" />
+                    <span className="text-sm">Gmail (read)</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-muted rounded p-2">
+                    <Zap className="h-4 w-4" />
+                    <span className="text-sm">Slack (write)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-3 mt-8 pt-6 border-t border-border">
+            <Button variant="outline">Cancel</Button>
+            <Button>Create Workflow</Button>
+          </div>
         </div>
       </div>
     </DashboardLayout>
