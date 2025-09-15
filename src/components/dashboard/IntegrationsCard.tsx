@@ -18,9 +18,24 @@ export default function IntegrationsCard({ onClose }: { onClose?: () => void }) 
     try {
       setConnecting(integration.slug);
       
-      // Get auth config ID from environment variables
-      const authConfigId = process.env[`NEXT_PUBLIC_${integration.slug.toUpperCase()}_AUTH_CONFIG_ID`];
-      console.log(integration.slug.toUpperCase(), authConfigId);
+    // Create a static mapping for auth config IDs
+    const authConfigMap: Record<string, string | undefined> = {
+      // gmail: process.env.NEXT_PUBLIC_GMAIL_AUTH_CONFIG_ID,
+      // github: process.env.NEXT_PUBLIC_GITHUB_AUTH_CONFIG_ID,
+      // notion: process.env.NEXT_PUBLIC_NOTION_AUTH_CONFIG_ID,
+      // slack: process.env.NEXT_PUBLIC_SLACK_AUTH_CONFIG_ID,
+      // linear: process.env.NEXT_PUBLIC_LINEAR_AUTH_CONFIG_ID,
+      // hubspot: process.env.NEXT_PUBLIC_HUBSPOT_AUTH_CONFIG_ID,
+      // googlecalendar: process.env.NEXT_PUBLIC_GOOGLECALENDAR_AUTH_CONFIG_ID,
+      googledocs: process.env.NEXT_PUBLIC_GOOGLEDOCS_AUTH_CONFIG_ID,
+      // googlesheets: process.env.NEXT_PUBLIC_GOOGLESHEETS_AUTH_CONFIG_ID,
+      // googledrive: process.env.NEXT_PUBLIC_GOOGLEDRIVE_AUTH_CONFIG_ID,
+    };
+    
+    const authConfigId = authConfigMap[integration.slug.toLowerCase()];
+
+    console.log(`Looking for config for: ${integration.slug.toLowerCase()}`);
+    console.log(`Found authConfigId: ${authConfigId}`);
       
       if (!authConfigId) {
         toast({

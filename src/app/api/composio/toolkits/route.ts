@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
     const connectedAccounts = await composio.connectedAccounts.list({
       userIds: [user.id],
     });
-
+    console.log(connectedAccounts);
+    
     // Create a map of toolkit slugs to connection IDs
     const connectionMap = new Map();
     if (connectedAccounts.items) {
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
 
     // If no toolkits were fetched, use fallback
     if (toolkits.length === 0) {
+      console.log("No toolkits fetched, using presets")
       toolkits = [
         {
           name: "Gmail",

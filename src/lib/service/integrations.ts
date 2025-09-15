@@ -43,6 +43,8 @@ class IntegrationsService {
         body: JSON.stringify({ authConfigId }),
       });
 
+      console.log(response);
+
       if (!response.ok) {
         throw new Error('Failed to initiate connection');
       }

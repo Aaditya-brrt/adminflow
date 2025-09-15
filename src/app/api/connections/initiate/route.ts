@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import composio from '@/lib/service/composio';
-
+ 
 export async function POST(request: NextRequest) {
   try {
     // Get authenticated user
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { authConfigId } = await request.json();
+    console.log(authConfigId);
 
     if (!authConfigId) {
       return NextResponse.json(
