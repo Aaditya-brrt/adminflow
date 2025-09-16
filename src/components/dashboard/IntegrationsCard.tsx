@@ -14,25 +14,31 @@ export default function IntegrationsCard({ onClose }: { onClose?: () => void }) 
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Create a static mapping for auth config IDs
+  const authConfigMap: Record<string, string | undefined> = {
+    gmail: process.env.NEXT_PUBLIC_GMAIL_AUTH_CONFIG_ID,
+    github: process.env.NEXT_PUBLIC_GITHUB_AUTH_CONFIG_ID,
+    notion: process.env.NEXT_PUBLIC_NOTION_AUTH_CONFIG_ID,
+    slack: process.env.NEXT_PUBLIC_SLACK_AUTH_CONFIG_ID,
+    linear: process.env.NEXT_PUBLIC_LINEAR_AUTH_CONFIG_ID,
+    hubspot: process.env.NEXT_PUBLIC_HUBSPOT_AUTH_CONFIG_ID,
+    googlecalendar: process.env.NEXT_PUBLIC_GOOGLECALENDAR_AUTH_CONFIG_ID,
+    googledocs: process.env.NEXT_PUBLIC_GOOGLEDOCS_AUTH_CONFIG_ID,
+    googlesheets: process.env.NEXT_PUBLIC_GOOGLESHEETS_AUTH_CONFIG_ID,
+    googledrive: process.env.NEXT_PUBLIC_GOOGLEDRIVE_AUTH_CONFIG_ID,
+  };
+
+  // Filter integrations to only show those with configured auth configs
+  const configuredIntegrations = integrations.filter(integration => {
+    const authConfigId = authConfigMap[integration.slug.toLowerCase()];
+    return authConfigId && authConfigId.trim() !== '' && authConfigId !== 'ac_xxxxxxxxxx';
+  });
+
   const handleConnect = async (integration: Integration) => {
     try {
       setConnecting(integration.slug);
       
-    // Create a static mapping for auth config IDs
-    const authConfigMap: Record<string, string | undefined> = {
-      // gmail: process.env.NEXT_PUBLIC_GMAIL_AUTH_CONFIG_ID,
-      // github: process.env.NEXT_PUBLIC_GITHUB_AUTH_CONFIG_ID,
-      // notion: process.env.NEXT_PUBLIC_NOTION_AUTH_CONFIG_ID,
-      // slack: process.env.NEXT_PUBLIC_SLACK_AUTH_CONFIG_ID,
-      // linear: process.env.NEXT_PUBLIC_LINEAR_AUTH_CONFIG_ID,
-      // hubspot: process.env.NEXT_PUBLIC_HUBSPOT_AUTH_CONFIG_ID,
-      // googlecalendar: process.env.NEXT_PUBLIC_GOOGLECALENDAR_AUTH_CONFIG_ID,
-      googledocs: process.env.NEXT_PUBLIC_GOOGLEDOCS_AUTH_CONFIG_ID,
-      // googlesheets: process.env.NEXT_PUBLIC_GOOGLESHEETS_AUTH_CONFIG_ID,
-      // googledrive: process.env.NEXT_PUBLIC_GOOGLEDRIVE_AUTH_CONFIG_ID,
-    };
-    
-    const authConfigId = authConfigMap[integration.slug.toLowerCase()];
+      const authConfigId = authConfigMap[integration.slug.toLowerCase()];
 
     console.log(`Looking for config for: ${integration.slug.toLowerCase()}`);
     console.log(`Found authConfigId: ${authConfigId}`);
@@ -51,8 +57,34 @@ export default function IntegrationsCard({ onClose }: { onClose?: () => void }) 
       // Store connection ID for status checking
       localStorage.setItem(`connection_${integration.slug}`, connectionId);
       
-      // Redirect to OAuth
-      window.location.href = redirectUrl;
+      // Open OAuth flow in popup window
+      const popup = window.open(
+        redirectUrl,
+        'composio-oauth',
+        'width=600,height=700,scrollbars=yes,resizable=yes,status=yes,location=yes,toolbar=no,menubar=no'
+      );
+
+      if (!popup) {
+        toast({
+          title: "Popup Blocked",
+          description: "Please allow popups for this site to complete the connection",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Monitor popup for completion
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          // Refresh integrations to show updated connection status
+          refreshIntegrations();
+          toast({
+            title: "Connection Complete",
+            description: `Please check if ${integration.name} was connected successfully`,
+          });
+        }
+      }, 1000);
     } catch (error) {
       console.error('Error connecting integration:', error);
       toast({
@@ -146,7 +178,7 @@ export default function IntegrationsCard({ onClose }: { onClose?: () => void }) 
       
       {/* Make the list scrollable if it overflows */}
       <div className="divide-y max-h-[60vh] overflow-y-auto">
-        {integrations.map((integration) => (
+        {configuredIntegrations.map((integration) => (
           <div
             key={integration.slug}
             className="flex items-center justify-between px-6 py-4 gap-4 bg-transparent"
@@ -198,11 +230,12 @@ export default function IntegrationsCard({ onClose }: { onClose?: () => void }) 
         ))}
       </div>
       
-      {integrations.length === 0 && (
+      {configuredIntegrations.length === 0 && (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
           <div className="text-center">
             <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-            <p>No integrations available</p>
+            <p>No configured integrations available</p>
+            <p className="text-xs mt-1">Set up auth config IDs in your environment variables</p>
           </div>
         </div>
       )}

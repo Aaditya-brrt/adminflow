@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import composio from '@/lib/service/composio';
+type ConnectionRequestResponse = {
+  id: string;
+  redirectUrl?: string | null;
+};
  
 export async function POST(request: NextRequest) {
   try {
@@ -30,10 +34,10 @@ export async function POST(request: NextRequest) {
     const connection = await composio.connectedAccounts.initiate(
       user.id,
       authConfigId,
-      {
-        callbackUrl,
-      }
-    );
+      // {
+      //   callbackUrl,
+      // }
+    ) as ConnectionRequestResponse;
 
     return NextResponse.json({
       redirectUrl: connection.redirectUrl,

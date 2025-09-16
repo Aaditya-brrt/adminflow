@@ -16,14 +16,21 @@ export async function GET(request: NextRequest) {
     const connectedAccounts = await composio.connectedAccounts.list({
       userIds: [user.id],
     });
-    console.log(connectedAccounts);
+    console.log('Connected accounts response:', connectedAccounts);
     
-    // Create a map of toolkit slugs to connection IDs
+    // Log individual account statuses for debugging
+    if (connectedAccounts.items) {
+      connectedAccounts.items.forEach(account => {
+        console.log(`Account ${account.id}: ${account.toolkit?.slug} - Status: ${account.status}, Disabled: ${account.isDisabled}`);
+      });
+    }
+    
+    // Create a map of toolkit slugs to connection IDs (only for ACTIVE connections)
     const connectionMap = new Map();
     if (connectedAccounts.items) {
       connectedAccounts.items.forEach(account => {
-        // Access the toolkit slug from the account
-        if (account.toolkit?.slug) {
+        // Access the toolkit slug from the account and only include ACTIVE connections
+        if (account.toolkit?.slug && account.status === 'ACTIVE' && !account.isDisabled) {
           connectionMap.set(account.toolkit.slug, account.id);
         }
       });
