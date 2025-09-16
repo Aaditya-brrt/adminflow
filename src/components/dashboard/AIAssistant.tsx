@@ -19,14 +19,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Send, Mic, Bot, User, Clock, Loader2 } from "lucide-react";
-
-interface Message {
-  id: string;
-  content: string;
-  sender: "user" | "assistant";
-  timestamp: Date;
-}
+import { Send, Mic, Bot, Clock, Loader2, MessageSquare } from "lucide-react";
+import { useChat } from "@ai-sdk/react";
+import { useChats } from "@/hooks/useChats";
+import { useToast } from "@/components/ui/use-toast";
+import { chatService } from "@/lib/service/chat";
 
 interface SuggestionChip {
   id: string;
@@ -38,128 +35,143 @@ interface AIAssistantProps {
 }
 
 const AIAssistant = ({ className = "" }: AIAssistantProps) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      content: "Hello! I'm your AdminFlow assistant. How can I help you today?",
-      sender: "assistant",
-      timestamp: new Date(),
-    },
-  ]);
-
-  const [inputValue, setInputValue] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionChip[]>([
-    { id: "1", text: "Summarize my inbox" },
-    { id: "2", text: "Schedule a meeting" },
-    { id: "3", text: "Create a task" },
-    { id: "4", text: "Reschedule my 2pm meeting" },
+    { id: "1", text: "Check my Gmail inbox" },
+    { id: "2", text: "Create a calendar event" },
+    { id: "3", text: "List my GitHub repositories" },
+    { id: "4", text: "Send a Slack message" },
   ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { createChat } = useChats();
+  const { toast } = useToast();
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
+    id: currentChatId || undefined,
+    body: {
+      chatId: currentChatId,
+    },
+    onFinish: async (message) => {
+      console.log('AI Assistant response finished:', message);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Scroll to bottom of messages when new messages are added
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isProcessing) return;
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!input.trim() || isLoading) return;
 
-    // Add user message to chat
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: inputValue,
-      sender: "user",
-      timestamp: new Date(),
-    };
+    // If no chat exists, create one
+    if (!currentChatId) {
+      const title = `Quick Chat: ${chatService.generateChatTitle(input)}`;
+      const newChat = await createChat(title, { isQuickChat: true });
+      
+      if (newChat) {
+        setCurrentChatId(newChat.id);
+        // Save user message to database
+        try {
+          await fetch(`/api/chats/${newChat.id}/messages`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              role: 'user',
+              content: input,
+            }),
+          });
+        } catch (error) {
+          console.error('Failed to save user message:', error);
+        }
+      }
+    } else {
+      // Save user message to database for existing chat
+      try {
+        await fetch(`/api/chats/${currentChatId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            role: 'user',
+            content: input,
+          }),
+        });
+      } catch (error) {
+        console.error('Failed to save user message:', error);
+      }
+    }
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInputValue("");
-    setIsProcessing(true);
-
-    // Simulate AI response (in a real app, this would call your AI service)
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: getSimulatedResponse(inputValue),
-        sender: "assistant",
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-      setIsProcessing(false);
-
-      // Update suggestions based on the conversation context
-      updateSuggestions(inputValue);
-    }, 1500);
+    // Update suggestions based on input
+    updateSuggestions(input);
+    
+    // Submit to AI
+    handleSubmit(e);
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
+    setInput(suggestion);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSendMessage();
+      handleSendMessage(e as any);
     }
   };
 
-  // Simulate AI responses based on user input
-  const getSimulatedResponse = (input: string): string => {
-    const lowerInput = input.toLowerCase();
-
-    if (lowerInput.includes("summarize") && lowerInput.includes("inbox")) {
-      return "I've analyzed your inbox. You have 12 unread emails: 3 high priority from your team, 5 client inquiries, and 4 newsletters. Would you like me to draft responses to any of these?";
-    } else if (
-      lowerInput.includes("schedule") &&
-      lowerInput.includes("meeting")
-    ) {
-      return "I can help schedule a meeting. What's the purpose, who should attend, and when would you prefer to have it?";
-    } else if (lowerInput.includes("create") && lowerInput.includes("task")) {
-      return "I've created a new task. Could you provide more details like deadline, priority, and any related documents?";
-    } else if (
-      lowerInput.includes("reschedule") &&
-      lowerInput.includes("2pm")
-    ) {
-      return "I've checked your calendar. Would you like to reschedule your 2pm 'Project Review' meeting to 4pm today or 10am tomorrow? I can notify all participants.";
-    } else {
-      return "I understand you need assistance with that. Could you provide more details so I can help you more effectively?";
-    }
+  const handleNewChat = () => {
+    setCurrentChatId(null);
+    // The useChat hook will reset when id changes
   };
 
   // Update suggestion chips based on conversation context
-  const updateSuggestions = (input: string) => {
-    const lowerInput = input.toLowerCase();
+  const updateSuggestions = (inputText: string) => {
+    const lowerInput = inputText.toLowerCase();
 
-    if (lowerInput.includes("inbox") || lowerInput.includes("email")) {
+    if (lowerInput.includes("gmail") || lowerInput.includes("email")) {
       setSuggestions([
-        { id: "1", text: "Draft responses to high priority emails" },
-        { id: "2", text: "Archive newsletters" },
-        { id: "3", text: "Flag client inquiries" },
+        { id: "1", text: "Check unread emails" },
+        { id: "2", text: "Send an email" },
+        { id: "3", text: "Search my emails" },
       ]);
-    } else if (
-      lowerInput.includes("meeting") ||
-      lowerInput.includes("schedule")
-    ) {
+    } else if (lowerInput.includes("calendar") || lowerInput.includes("meeting")) {
       setSuggestions([
-        { id: "1", text: "Schedule for 3pm today" },
-        { id: "2", text: "Schedule for tomorrow morning" },
-        { id: "3", text: "Send meeting agenda template" },
+        { id: "1", text: "Schedule a meeting" },
+        { id: "2", text: "Check my calendar" },
+        { id: "3", text: "Find available time slots" },
       ]);
-    } else if (lowerInput.includes("task")) {
+    } else if (lowerInput.includes("github") || lowerInput.includes("repository")) {
       setSuggestions([
-        { id: "1", text: "Set high priority" },
-        { id: "2", text: "Due by end of week" },
-        { id: "3", text: "Assign to team member" },
+        { id: "1", text: "List my repositories" },
+        { id: "2", text: "Check recent commits" },
+        { id: "3", text: "Create a new issue" },
+      ]);
+    } else if (lowerInput.includes("slack")) {
+      setSuggestions([
+        { id: "1", text: "Send a message" },
+        { id: "2", text: "Check team channels" },
+        { id: "3", text: "Set my status" },
       ]);
     } else {
       setSuggestions([
-        { id: "1", text: "Summarize my inbox" },
-        { id: "2", text: "Schedule a meeting" },
-        { id: "3", text: "Create a task" },
-        { id: "4", text: "Reschedule my 2pm meeting" },
+        { id: "1", text: "Check my Gmail inbox" },
+        { id: "2", text: "Create a calendar event" },
+        { id: "3", text: "List my GitHub repositories" },
+        { id: "4", text: "Send a Slack message" },
       ]);
     }
   };
@@ -168,28 +180,53 @@ const AIAssistant = ({ className = "" }: AIAssistantProps) => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  // Show welcome message if no messages
+  const displayMessages = messages.length > 0 ? messages : [
+    {
+      id: "welcome",
+      role: "assistant" as const,
+      content: "Hello! I'm your AdminFlow assistant. I can help you with your connected tools and services. What would you like to do today?",
+      createdAt: new Date(),
+    }
+  ];
+
   return (
     <Card className={`flex flex-col h-full bg-background ${className}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center text-lg font-semibold">
-          <Bot className="mr-2 h-5 w-5" />
-          AI Assistant
+        <CardTitle className="flex items-center justify-between text-lg font-semibold">
+          <div className="flex items-center">
+            <Bot className="mr-2 h-5 w-5" />
+            AI Assistant
+          </div>
+          {currentChatId && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleNewChat}
+              className="h-6 w-6 p-0"
+            >
+              <MessageSquare className="h-4 w-4" />
+            </Button>
+          )}
         </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Quick access to your connected tools
+        </p>
       </CardHeader>
 
       <CardContent className="flex-grow p-0 overflow-hidden">
         <ScrollArea className="h-[calc(100%-2rem)] px-4">
           <div className="flex flex-col space-y-4 py-4">
-            {messages.map((message) => (
+            {displayMessages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`flex items-start max-w-[80%] ${message.sender === "user" ? "flex-row-reverse" : ""}`}
+                  className={`flex items-start max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : ""}`}
                 >
                   <Avatar className="h-8 w-8 mt-1 mx-2">
-                    {message.sender === "assistant" ? (
+                    {message.role === "assistant" ? (
                       <AvatarImage
                         src="https://api.dicebear.com/7.x/bottts/svg?seed=adminflow"
                         alt="AI"
@@ -201,30 +238,32 @@ const AIAssistant = ({ className = "" }: AIAssistantProps) => {
                       />
                     )}
                     <AvatarFallback>
-                      {message.sender === "assistant" ? "AI" : "U"}
+                      {message.role === "assistant" ? "AI" : "U"}
                     </AvatarFallback>
                   </Avatar>
 
                   <div>
                     <div
                       className={`rounded-lg px-4 py-2 ${
-                        message.sender === "assistant"
+                        message.role === "assistant"
                           ? "bg-secondary text-secondary-foreground"
                           : "bg-primary text-primary-foreground"
                       }`}
                     >
                       {message.content}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1 flex items-center">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {formatTime(message.timestamp)}
-                    </div>
+                    {message.createdAt && (
+                      <div className="text-xs text-muted-foreground mt-1 flex items-center">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {formatTime(new Date(message.createdAt))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             ))}
 
-            {isProcessing && (
+            {isLoading && (
               <div className="flex justify-start">
                 <div className="flex items-start max-w-[80%]">
                   <Avatar className="h-8 w-8 mt-1 mx-2">
@@ -238,7 +277,7 @@ const AIAssistant = ({ className = "" }: AIAssistantProps) => {
                   <div className="rounded-lg px-4 py-2 bg-secondary text-secondary-foreground">
                     <div className="flex items-center">
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Processing...
+                      Thinking...
                     </div>
                   </div>
                 </div>
@@ -256,7 +295,7 @@ const AIAssistant = ({ className = "" }: AIAssistantProps) => {
             <Badge
               key={suggestion.id}
               variant="outline"
-              className="cursor-pointer hover:bg-secondary transition-colors"
+              className="cursor-pointer hover:bg-secondary transition-colors text-xs"
               onClick={() => handleSuggestionClick(suggestion.text)}
             >
               {suggestion.text}
@@ -266,19 +305,19 @@ const AIAssistant = ({ className = "" }: AIAssistantProps) => {
       </div>
 
       <CardFooter className="pt-0">
-        <div className="flex w-full items-center space-x-2">
+        <form onSubmit={handleSendMessage} className="flex w-full items-center space-x-2">
           <Input
-            placeholder="Type a command or question..."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Ask me anything..."
+            value={input}
+            onChange={handleInputChange}
             onKeyDown={handleKeyPress}
-            disabled={isProcessing}
+            disabled={isLoading}
             className="flex-grow"
           />
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" disabled={isProcessing}>
+                <Button size="icon" variant="ghost" disabled={true}>
                   <Mic className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -290,12 +329,12 @@ const AIAssistant = ({ className = "" }: AIAssistantProps) => {
 
           <Button
             size="icon"
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isProcessing}
+            type="submit"
+            disabled={!input.trim() || isLoading}
           >
-            <Send className="h-4 w-4" />
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
-        </div>
+        </form>
       </CardFooter>
     </Card>
   );
