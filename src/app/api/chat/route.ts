@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       // Extract toolkit slugs from connected accounts
       const connectedToolkitSlugs = connectedAccounts.items
         .filter((account: any) => account.status === 'ACTIVE' && !account.isDisabled)
-        .map((account: any) => account.toolkit.slug);
+        .map((account: any) => account.toolkit.slug.toUpperCase());
 
       console.log('Connected toolkit slugs:', connectedToolkitSlugs);
 
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
         // Use Vercel provider to get properly formatted tools
         tools = await composio.tools.get(user.id, {
           toolkits: connectedToolkitSlugs,
+          limit: 100,
         });
         console.log('Total tools available:', Object.keys(tools).length);
         console.log('Tools:', Object.keys(tools));
