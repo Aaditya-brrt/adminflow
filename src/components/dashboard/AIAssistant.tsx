@@ -195,8 +195,8 @@ const AIAssistant = ({ className = "" }: AIAssistantProps) => {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center justify-between text-lg font-semibold">
           <div className="flex items-center">
-            <Bot className="mr-2 h-5 w-5" />
-            AI Assistant
+          <Bot className="mr-2 h-5 w-5" />
+          AI Assistant
           </div>
           {currentChatId && (
             <Button
@@ -253,10 +253,10 @@ const AIAssistant = ({ className = "" }: AIAssistantProps) => {
                       {message.content}
                     </div>
                     {message.createdAt && (
-                      <div className="text-xs text-muted-foreground mt-1 flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
+                    <div className="text-xs text-muted-foreground mt-1 flex items-center">
+                      <Clock className="h-3 w-3 mr-1" />
                         {formatTime(new Date(message.createdAt))}
-                      </div>
+                    </div>
                     )}
                   </div>
                 </div>

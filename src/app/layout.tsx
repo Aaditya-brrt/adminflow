@@ -1,4 +1,5 @@
 import { TempoInit } from "@/components/tempo-init";
+import { WorkflowSchedulerInit } from "@/components/workflow-scheduler-init";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
@@ -24,6 +25,7 @@ export default function RootLayout({
         <div id="modal-root"></div>
         {children}
         <TempoInit />
+        <WorkflowSchedulerInit />
         <Toaster />
       </body>
     </html>

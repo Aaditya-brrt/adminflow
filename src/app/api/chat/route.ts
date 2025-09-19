@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       // Extract toolkit slugs from connected accounts
       const connectedToolkitSlugs = connectedAccounts.items
         .filter((account: any) => account.status === 'ACTIVE' && !account.isDisabled)
-        .map((account: any) => account.toolkit.slug.toUpperCase());
+        .map((account: any) => account.toolkit.slug);
 
       console.log('Connected toolkit slugs:', connectedToolkitSlugs);
 

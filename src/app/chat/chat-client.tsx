@@ -128,7 +128,7 @@ export default function ChatClient() {
       setSelectedChatId(chats[0].id);
     }
   }, [chats, selectedChatId, chatsLoading]);
-
+  
   return (
     <DashboardLayout>
       <div className="flex w-full h-[80vh] max-w-7xl mx-auto bg-background rounded-lg border shadow overflow-hidden">
@@ -245,8 +245,8 @@ export default function ChatClient() {
                             </div>
                           )}
                         </Card>
-                      </div>
-                    ))}
+              </div>
+            ))}
                     {isLoading && (
                       <div className="flex justify-start">
                         <Card className="bg-secondary p-3">
@@ -295,8 +295,8 @@ export default function ChatClient() {
                     {isCreatingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : "Start Chat"}
                   </Button>
                 </div>
-              </div>
-            </div>
+          </div>
+          </div>
           )}
         </div>
       </div>
