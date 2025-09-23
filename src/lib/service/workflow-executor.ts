@@ -21,6 +21,27 @@ export interface ExecutionResult {
   executionTime: number;
 }
 
+export interface ExecutionStep {
+  stepNumber: number;
+  stepType: 'ai_generation' | 'tool_call' | 'tool_result' | 'error';
+  timestamp: string;
+  aiResponse?: string;
+  toolCall?: {
+    toolCallId: string;
+    toolName: string;
+    arguments: any;
+  };
+  toolResult?: {
+    toolCallId: string;
+    result: any;
+    executionTime?: number;
+    success: boolean;
+    error?: string;
+  };
+  error?: string;
+  metadata?: Record<string, any>;
+}
+
 export class WorkflowExecutor {
   private supabase: SupabaseClient;
   private workflowService: WorkflowService;
@@ -31,10 +52,12 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Execute a workflow by ID
+   * Execute a workflow by ID with detailed step-by-step logging
    */
   async executeWorkflow(workflowId: string, userId: string): Promise<ExecutionResult> {
     const startTime = Date.now();
+    const executionLog: ExecutionStep[] = [];
+    let stepNumber = 1;
     
     try {
       console.log(`[WorkflowExecutor] Starting execution for workflow ${workflowId}`);
@@ -53,6 +76,18 @@ export class WorkflowExecutor {
       const workflowRun = await this.workflowService.createWorkflowRun(workflowId, {
         triggered_by: 'schedule',
         input_data: {}
+      });
+
+      // Log workflow start
+      executionLog.push({
+        stepNumber: stepNumber++,
+        stepType: 'ai_generation',
+        timestamp: new Date().toISOString(),
+        metadata: {
+          action: 'workflow_start',
+          workflowName: workflow.name,
+          workflowDescription: workflow.description
+        }
       });
 
       // Use the shared Composio instance with VercelProvider
@@ -78,8 +113,25 @@ export class WorkflowExecutor {
       if (!connectedToolkitSlugs.includes('composio')) {
         connectedToolkitSlugs.push('composio');
       }
+      
+      // Always include composio_search toolkit for research capabilities
+      if (!connectedToolkitSlugs.includes('composio_search')) {
+        connectedToolkitSlugs.push('composio_search');
+      }
 
       console.log(`[WorkflowExecutor] Connected toolkits: ${connectedToolkitSlugs.join(', ')}`);
+
+      // Log available tools
+      executionLog.push({
+        stepNumber: stepNumber++,
+        stepType: 'ai_generation',
+        timestamp: new Date().toISOString(),
+        metadata: {
+          action: 'tools_available',
+          connectedToolkits: connectedToolkitSlugs,
+          activeAccountsCount: activeAccounts.length
+        }
+      });
 
       // Get tools for connected toolkits
       let tools = {};
@@ -102,10 +154,10 @@ export class WorkflowExecutor {
         composio
       };
 
-      // Execute the workflow
-      const result = await this.executeWithAI(context);
+      // Execute the workflow with detailed logging
+      const result = await this.executeWithAI(context, executionLog, stepNumber);
 
-      // Update workflow run with results
+      // Update workflow run with results and detailed execution log
       await this.workflowService.updateWorkflowRun(workflowRun.id, {
         status: result.success ? 'completed' : 'failed',
         output_data: {
@@ -113,6 +165,7 @@ export class WorkflowExecutor {
           toolCalls: result.toolCalls,
           executionTime: result.executionTime
         },
+        execution_log: executionLog,
         error_message: result.error,
         completed_at: new Date().toISOString()
       });
@@ -123,6 +176,35 @@ export class WorkflowExecutor {
     } catch (error) {
       const executionTime = Date.now() - startTime;
       console.error(`[WorkflowExecutor] Workflow execution failed:`, error);
+      
+      // Log the error
+      executionLog.push({
+        stepNumber: stepNumber++,
+        stepType: 'error',
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'Unknown error',
+        metadata: {
+          executionTime,
+          stackTrace: error instanceof Error ? error.stack : undefined
+        }
+      });
+
+      // Try to update the workflow run with error log
+      try {
+        const workflowRun = await this.workflowService.createWorkflowRun(workflowId, {
+          triggered_by: 'schedule',
+          input_data: {}
+        });
+        
+        await this.workflowService.updateWorkflowRun(workflowRun.id, {
+          status: 'failed',
+          execution_log: executionLog,
+          error_message: error instanceof Error ? error.message : 'Unknown error',
+          completed_at: new Date().toISOString()
+        });
+      } catch (updateError) {
+        console.error('Failed to update workflow run with error:', updateError);
+      }
       
       const result: ExecutionResult = {
         success: false,
@@ -136,10 +218,11 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Execute workflow using AI with tools
+   * Execute workflow using AI with detailed step-by-step logging
    */
-  private async executeWithAI(context: ExecutionContext): Promise<ExecutionResult> {
+  private async executeWithAI(context: ExecutionContext, executionLog: ExecutionStep[], startingStepNumber: number): Promise<ExecutionResult> {
     const startTime = Date.now();
+    let stepNumber = startingStepNumber;
     
     try {
       const { workflow, tools, composio, userId } = context;
@@ -150,11 +233,24 @@ export class WorkflowExecutor {
       // Build user prompt
       const userPrompt = this.buildUserPrompt(workflow);
 
-      console.log(`[WorkflowExecutor] Executing AI with ${tools.length} tools available`);
+      console.log(`[WorkflowExecutor] Executing AI with ${Object.keys(tools).length} tools available`);
       console.log(`[WorkflowExecutor] User prompt: ${userPrompt.substring(0, 200)}...`);
 
-      // Execute with AI
-      // Using the same pattern as the working chat implementation
+      // Log AI execution start
+      executionLog.push({
+        stepNumber: stepNumber++,
+        stepType: 'ai_generation',
+        timestamp: new Date().toISOString(),
+        metadata: {
+          action: 'ai_execution_start',
+          systemPrompt: systemPrompt.substring(0, 500) + '...',
+          userPrompt: userPrompt,
+          availableToolsCount: Object.keys(tools).length,
+          availableTools: Object.keys(tools).slice(0, 10) // First 10 tools
+        }
+      });
+
+      // Execute with AI using enhanced logging
       const result = await generateText({
         model: deepseek('deepseek-chat'),
         system: systemPrompt,
@@ -162,10 +258,83 @@ export class WorkflowExecutor {
         tools: {
           ...tools,
         },
-        maxSteps: 5,
+        maxSteps: 10, // Allow more steps for complex workflows
+        onStepFinish: async ({ text, toolCalls, toolResults, stepType, isContinued }) => {
+          // Log each step completion
+          executionLog.push({
+            stepNumber: stepNumber++,
+            stepType: 'ai_generation',
+            timestamp: new Date().toISOString(),
+            aiResponse: text,
+            metadata: {
+              stepType,
+              isContinued,
+              toolCallsCount: toolCalls?.length || 0,
+              toolResultsCount: toolResults?.length || 0
+            }
+          });
+
+          // Log individual tool calls
+          if (toolCalls && toolCalls.length > 0) {
+            for (const toolCall of toolCalls) {
+              executionLog.push({
+                stepNumber: stepNumber++,
+                stepType: 'tool_call',
+                timestamp: new Date().toISOString(),
+                toolCall: {
+                  toolCallId: toolCall.toolCallId,
+                  toolName: toolCall.toolName,
+                  arguments: toolCall.args
+                },
+                metadata: {
+                  toolCallType: 'initiated'
+                }
+              });
+            }
+          }
+
+          // Log individual tool results
+          if (toolResults && toolResults.length > 0) {
+            for (const toolResult of toolResults) {
+              const isError = toolResult.result instanceof Error || 
+                             (typeof toolResult.result === 'object' && toolResult.result?.error);
+              
+              executionLog.push({
+                stepNumber: stepNumber++,
+                stepType: 'tool_result',
+                timestamp: new Date().toISOString(),
+                toolResult: {
+                  toolCallId: toolResult.toolCallId,
+                  result: toolResult.result,
+                  success: !isError,
+                  error: isError ? (toolResult.result instanceof Error ? toolResult.result.message : toolResult.result?.error) : undefined
+                },
+                metadata: {
+                  resultType: isError ? 'error' : 'success'
+                }
+              });
+            }
+          }
+
+          console.log(`[WorkflowExecutor] Step ${stepNumber - 1} completed: ${text?.substring(0, 100)}...`);
+        },
       });
 
       const executionTime = Date.now() - startTime;
+
+      // Log final AI completion
+      executionLog.push({
+        stepNumber: stepNumber++,
+        stepType: 'ai_generation',
+        timestamp: new Date().toISOString(),
+        aiResponse: result.text,
+        metadata: {
+          action: 'ai_execution_complete',
+          totalSteps: result.steps?.length || 0,
+          finalResponse: result.text,
+          executionTime
+        }
+      });
 
       return {
         success: true,
@@ -177,6 +346,19 @@ export class WorkflowExecutor {
     } catch (error) {
       const executionTime = Date.now() - startTime;
       console.error(`[WorkflowExecutor] AI execution failed:`, error);
+      
+      // Log AI execution error
+      executionLog.push({
+        stepNumber: stepNumber++,
+        stepType: 'error',
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'AI execution failed',
+        metadata: {
+          action: 'ai_execution_error',
+          executionTime,
+          stackTrace: error instanceof Error ? error.stack : undefined
+        }
+      });
       
       return {
         success: false,
@@ -209,6 +391,8 @@ INSTRUCTIONS:
    - Any issues encountered
 4. Be thorough in your explanation as this will be logged for the user
 5. If you cannot complete the task, explain why and what tools/permissions are needed
+6. Take your time to complete complex tasks - you have up to 10 steps available
+7. Use multiple tools in sequence if needed to accomplish the goal
 
 Remember: You are running automatically on a schedule, so the user is not actively monitoring this execution. Your response will be logged for later review.`;
   }

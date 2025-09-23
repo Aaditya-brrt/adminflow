@@ -26,9 +26,19 @@ export async function POST(req: NextRequest) {
       });
 
       // Extract toolkit slugs from connected accounts
-      const connectedToolkitSlugs = connectedAccounts.items
+      const connectedToolkitSlugs = Array.from(new Set(connectedAccounts.items
         .filter((account: any) => account.status === 'ACTIVE' && !account.isDisabled)
-        .map((account: any) => account.toolkit.slug);
+        .map((account: any) => account.toolkit.slug)));
+
+      // Always include composio toolkit for intelligent routing
+      if (!connectedToolkitSlugs.includes('composio')) {
+        connectedToolkitSlugs.push('composio');
+      }
+      
+      // Always include composio_search toolkit for research capabilities
+      if (!connectedToolkitSlugs.includes('composio_search')) {
+        connectedToolkitSlugs.push('composio_search');
+      }
 
       console.log('Connected toolkit slugs:', connectedToolkitSlugs);
 
@@ -60,13 +70,38 @@ export async function POST(req: NextRequest) {
     const result = streamText({
       model: deepseek('deepseek-chat'),
       messages: coreMessages,
-      maxSteps: 5,
+      maxSteps: 10, // Allow more steps for complex tasks
       tools: {
         ...tools,
       },
-      onFinish: async ({ text, toolCalls, toolResults }) => {
+      onStepFinish: async ({ text, toolCalls, toolResults, stepType, isContinued }) => {
+        // Log each step for debugging
+        console.log(`[Chat] Step completed - Type: ${stepType}, Continued: ${isContinued}`);
+        
+        if (text) {
+          console.log(`[Chat] AI Response: ${text.substring(0, 100)}...`);
+        }
+        
+        if (toolCalls && toolCalls.length > 0) {
+          console.log(`[Chat] Tool calls made:`, toolCalls.map((call: any) => ({
+            toolName: call.toolName,
+            args: Object.keys(call.args || {})
+          })));
+        }
+        
+        if (toolResults && toolResults.length > 0) {
+          console.log(`[Chat] Tool results:`, toolResults.map((result: any) => ({
+            toolCallId: result.toolCallId,
+            success: !result.isError,
+            resultType: typeof result.result
+          })));
+        }
+      },
+      onFinish: async ({ text, toolCalls, toolResults, steps }) => {
         try {
-          // Debug: Log tool calls made by the AI
+          // Debug: Log final completion
+          console.log(`[Chat] Final completion - Total steps: ${steps?.length || 0}`);
+          
           if (toolCalls && toolCalls.length > 0) {
             console.log('AI made tool calls:', toolCalls.map((call: any) => ({
               toolName: call.toolName,
@@ -76,7 +111,7 @@ export async function POST(req: NextRequest) {
             console.log('AI made no tool calls');
           }
 
-          // Save the assistant's response to the database
+          // Save the assistant's response to the database with detailed metadata
           if (chatId) {
             const chatService = new ChatService(supabase);
             await chatService.createMessage({
@@ -85,6 +120,11 @@ export async function POST(req: NextRequest) {
               content: text,
               tool_calls: toolCalls?.length ? toolCalls : undefined,
               tool_results: toolResults?.length ? toolResults : undefined,
+              metadata: {
+                totalSteps: steps?.length || 0,
+                executionTime: Date.now(), // Will be calculated properly in the future
+                toolsUsed: toolCalls?.map((call: any) => call.toolName) || []
+              }
             });
           }
         } catch (error) {

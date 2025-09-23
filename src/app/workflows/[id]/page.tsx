@@ -385,8 +385,86 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
                           </div>
                         </div>
                         
-                        {/* AI Execution Output */}
-                        {run.output_data && run.output_data.result && (
+                        {/* Detailed Execution Log */}
+                        {run.execution_log && run.execution_log.length > 0 && (
+                          <div className="px-3 pb-3">
+                            <details className="group">
+                              <summary className="text-xs font-medium text-muted-foreground mb-2 cursor-pointer hover:text-foreground flex items-center gap-2">
+                                <span>Execution Steps ({run.execution_log.length})</span>
+                                <ArrowRight className="h-3 w-3 transition-transform group-open:rotate-90" />
+                              </summary>
+                              <div className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                                {run.execution_log.map((step: any, index: number) => (
+                                  <div key={index} className="text-xs border-l-2 pl-3 py-1" 
+                                       style={{
+                                         borderColor: 
+                                           step.stepType === 'error' ? '#ef4444' :
+                                           step.stepType === 'tool_call' ? '#3b82f6' :
+                                           step.stepType === 'tool_result' ? '#10b981' :
+                                           '#6b7280'
+                                       }}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="font-medium text-xs">
+                                        Step {step.stepNumber}
+                                      </span>
+                                      <Badge variant="outline" className="text-xs px-1 py-0">
+                                        {step.stepType.replace('_', ' ')}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground">
+                                        {new Date(step.timestamp).toLocaleTimeString()}
+                                      </span>
+                                    </div>
+                                    
+                                    {step.aiResponse && (
+                                      <div className="text-xs text-muted-foreground mb-1">
+                                        <strong>AI:</strong> {step.aiResponse.substring(0, 100)}
+                                        {step.aiResponse.length > 100 && '...'}
+                                      </div>
+                                    )}
+                                    
+                                    {step.toolCall && (
+                                      <div className="text-xs text-blue-600 mb-1">
+                                        <strong>Tool:</strong> {step.toolCall.toolName}
+                                        {step.toolCall.arguments && Object.keys(step.toolCall.arguments).length > 0 && (
+                                          <span className="text-muted-foreground ml-1">
+                                            ({Object.keys(step.toolCall.arguments).join(', ')})
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                    
+                                    {step.toolResult && (
+                                      <div className={`text-xs mb-1 ${step.toolResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                                        <strong>Result:</strong> 
+                                        {step.toolResult.success ? ' ✓ Success' : ' ✗ Error'}
+                                        {step.toolResult.error && (
+                                          <div className="text-red-600 mt-1">
+                                            {step.toolResult.error}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                    
+                                    {step.error && (
+                                      <div className="text-xs text-red-600 mb-1">
+                                        <strong>Error:</strong> {step.error}
+                                      </div>
+                                    )}
+                                    
+                                    {step.metadata?.action && (
+                                      <div className="text-xs text-muted-foreground">
+                                        {step.metadata.action.replace('_', ' ')}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </div>
+                        )}
+                        
+                        {/* Fallback: AI Execution Output (for runs without detailed logs) */}
+                        {(!run.execution_log || run.execution_log.length === 0) && run.output_data && run.output_data.result && (
                           <div className="px-3 pb-3">
                             <div className="text-xs font-medium text-muted-foreground mb-1">AI Output:</div>
                             <div className="text-sm bg-muted p-2 rounded text-muted-foreground max-h-20 overflow-y-auto">
@@ -398,8 +476,8 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
                           </div>
                         )}
                         
-                        {/* Tool Calls */}
-                        {run.output_data && run.output_data.toolCalls && run.output_data.toolCalls.length > 0 && (
+                        {/* Fallback: Tool Calls (for runs without detailed logs) */}
+                        {(!run.execution_log || run.execution_log.length === 0) && run.output_data && run.output_data.toolCalls && run.output_data.toolCalls.length > 0 && (
                           <div className="px-3 pb-3">
                             <div className="text-xs font-medium text-muted-foreground mb-1">
                               Tools Used ({run.output_data.toolCalls.length}):
