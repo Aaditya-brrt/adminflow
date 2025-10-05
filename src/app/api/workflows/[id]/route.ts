@@ -21,7 +21,7 @@ export async function GET(
     const workflow = await workflowService.getWorkflow(id);
     
     if (!workflow) {
-      return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Wonrkflow ot found' }, { status: 404 });
     }
 
     return NextResponse.json(workflow);

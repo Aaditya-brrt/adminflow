@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { useWorkflow, useWorkflowRuns } from "@/hooks/useWorkflows";
 import { useWorkflows } from "@/hooks/useWorkflows";
 import { useToast } from "@/components/ui/use-toast";
+import { LiveRunCard } from "@/components/workflow/LiveRunCard";
 import { 
   Calendar, 
   Clock, 
@@ -33,6 +34,7 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
   const { toast } = useToast();
   const [isToggling, setIsToggling] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [currentExecutionRunId, setCurrentExecutionRunId] = useState<string | null>(null);
   
   const { workflow, loading, error } = useWorkflow(id);
   const { runs, loading: runsLoading, fetchRuns } = useWorkflowRuns(id);
@@ -84,6 +86,28 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
     }
   };
 
+  const handleExecutionComplete = (status: 'completed' | 'failed') => {
+    setIsExecuting(false);
+    
+    // Refresh the runs to show the completed execution
+    if (fetchRuns) {
+      fetchRuns();
+    }
+    
+    toast({
+      title: status === 'completed' ? "Execution Completed" : "Execution Failed",
+      description: status === 'completed' 
+        ? "Workflow executed successfully!" 
+        : "Workflow execution failed. Check the logs for details.",
+      variant: status === 'failed' ? "destructive" : "default",
+    });
+
+    // Clear the current execution after a delay to allow viewing the final state
+    setTimeout(() => {
+      setCurrentExecutionRunId(null);
+    }, 5000);
+  };
+
   const handleExecuteNow = async () => {
     if (!workflow) return;
     
@@ -99,15 +123,15 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
       const result = await response.json();
       
       if (result.success) {
-        toast({
-          title: "Success",
-          description: "Workflow executed successfully!",
-        });
-        
-        // Refresh the runs to show the new execution
-        if (fetchRuns) {
-          fetchRuns();
+        // Set the run ID for live tracking
+        if (result.runId) {
+          setCurrentExecutionRunId(result.runId);
         }
+        
+        toast({
+          title: "Execution Started",
+          description: "Workflow execution started! Watch the live updates below.",
+        });
       } else {
         toast({
           title: "Execution Failed",
@@ -364,11 +388,21 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
                   <div className="flex items-center justify-center py-4">
                     <Loader2 className="h-5 w-5 animate-spin" />
                   </div>
-                ) : runs.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">No runs yet</p>
                 ) : (
                   <div className="space-y-3">
-                    {runs.slice(0, 5).map((run) => (
+                    {/* Live Execution Card - Show when there's an active execution */}
+                    {currentExecutionRunId && (
+                      <LiveRunCard 
+                        workflowRunId={currentExecutionRunId}
+                        onComplete={handleExecutionComplete}
+                      />
+                    )}
+                    
+                    {/* Historical Runs */}
+                    {runs.length === 0 && !currentExecutionRunId ? (
+                      <p className="text-muted-foreground text-center py-4">No runs yet</p>
+                    ) : (
+                      runs.slice(0, 5).map((run) => (
                       <div key={run.id} className="border rounded-lg overflow-hidden">
                         <div className="flex items-center justify-between p-3">
                           <div className="flex items-center gap-3">
@@ -507,7 +541,8 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
                           </div>
                         )}
                       </div>
-                    ))}
+                    ))
+                    )}
                     {runs.length > 5 && (
                       <Button variant="outline" className="w-full" asChild>
                         <Link href={`/workflows/${workflow.id}/logs`}>

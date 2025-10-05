@@ -19,6 +19,7 @@ export interface ExecutionResult {
   toolCalls?: any[];
   error?: string;
   executionTime: number;
+  runId?: string;
 }
 
 export interface ExecutionStep {
@@ -171,7 +172,7 @@ export class WorkflowExecutor {
       });
 
       console.log(`[WorkflowExecutor] Workflow execution completed in ${result.executionTime}ms`);
-      return result;
+      return { ...result, runId: workflowRun.id };
 
     } catch (error) {
       const executionTime = Date.now() - startTime;
@@ -210,10 +211,60 @@ export class WorkflowExecutor {
         success: false,
         output: '',
         error: error instanceof Error ? error.message : 'Unknown error',
-        executionTime
+        executionTime,
+        runId: undefined // No run ID available on error during initial setup
       };
 
       return result;
+    }
+  }
+
+  /**
+   * Insert a live step and broadcast it for real-time updates
+   */
+  private async insertLiveStep(
+    runId: string,
+    stepNumber: number,
+    stepType: 'ai_generation' | 'tool_call' | 'tool_result' | 'error' | 'completion',
+    content?: string,
+    metadata?: Record<string, any>
+  ): Promise<void> {
+    const liveStep = {
+      workflow_run_id: runId,
+      step_number: stepNumber,
+      step_type: stepType,
+      content: content,
+      timestamp: new Date().toISOString(),
+      metadata: metadata || {}
+    };
+
+    try {
+      // Insert into database
+      const { data, error } = await this.supabase
+        .from('workflow_live_steps')
+        .insert([liveStep])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[WorkflowExecutor] Failed to insert live step:', error);
+        return;
+      }
+
+      // Broadcast directly to Supabase Realtime channel
+      const channel = this.supabase.channel(`workflow_run:${runId}`);
+      
+      await channel.send({
+        type: 'broadcast',
+        event: 'STEP_UPDATE',
+        payload: {
+          new: data
+        }
+      });
+
+      console.log(`[WorkflowExecutor] Broadcasted step ${stepNumber} (${stepType}) to workflow_run:${runId}`);
+    } catch (error) {
+      console.error('[WorkflowExecutor] Error in insertLiveStep:', error);
     }
   }
 
@@ -227,114 +278,256 @@ export class WorkflowExecutor {
     try {
       const { workflow, tools, composio, userId } = context;
 
+      // Get the connected toolkits for the system prompt
+      const connectedAccounts = await composio.connectedAccounts.list({ 
+        userIds: [userId] 
+      });
+      const activeAccounts = connectedAccounts.items.filter(
+        (account: any) => account.status === 'ACTIVE' && !account.isDisabled
+      );
+      const connectedToolkitSlugs = Array.from(new Set(activeAccounts.map((account: any) => account.toolkit.slug)));
+      
+      // Always include composio toolkit for intelligent routing
+      if (!connectedToolkitSlugs.includes('composio')) {
+        connectedToolkitSlugs.push('composio');
+      }
+      
+      // Always include composio_search toolkit for research capabilities
+      if (!connectedToolkitSlugs.includes('composio_search')) {
+        connectedToolkitSlugs.push('composio_search');
+      }
+
       // Build system prompt
-      const systemPrompt = this.buildSystemPrompt(workflow, tools);
+      const systemPrompt = this.buildSystemPrompt(workflow, tools, connectedToolkitSlugs);
       
       // Build user prompt
       const userPrompt = this.buildUserPrompt(workflow);
 
       console.log(`[WorkflowExecutor] Executing AI with ${Object.keys(tools).length} tools available`);
       console.log(`[WorkflowExecutor] User prompt: ${userPrompt.substring(0, 200)}...`);
+      console.log(`[WorkflowExecutor] System prompt length: ${systemPrompt.length} characters`);
+      console.log(`[WorkflowExecutor] Connected toolkits: ${connectedToolkitSlugs.join(', ')}`);
 
       // Log AI execution start
+      const currentStep = stepNumber++;
+      const stepMetadata = {
+        action: 'ai_execution_start',
+        systemPrompt: systemPrompt.substring(0, 500) + '...',
+        userPrompt: userPrompt,
+        availableToolsCount: Object.keys(tools).length,
+        availableTools: Object.keys(tools).slice(0, 10) // First 10 tools
+      };
+      
       executionLog.push({
-        stepNumber: stepNumber++,
+        stepNumber: currentStep,
         stepType: 'ai_generation',
         timestamp: new Date().toISOString(),
-        metadata: {
-          action: 'ai_execution_start',
-          systemPrompt: systemPrompt.substring(0, 500) + '...',
-          userPrompt: userPrompt,
-          availableToolsCount: Object.keys(tools).length,
-          availableTools: Object.keys(tools).slice(0, 10) // First 10 tools
-        }
+        metadata: stepMetadata
       });
 
-      // Execute with AI using enhanced logging
-      const result = await generateText({
-        model: deepseek('deepseek-chat'),
-        system: systemPrompt,
-        prompt: userPrompt,
-        tools: {
-          ...tools,
-        },
-        maxSteps: 10, // Allow more steps for complex workflows
-        onStepFinish: async ({ text, toolCalls, toolResults, stepType, isContinued }) => {
-          // Log each step completion
-          executionLog.push({
-            stepNumber: stepNumber++,
-            stepType: 'ai_generation',
-            timestamp: new Date().toISOString(),
-            aiResponse: text,
-            metadata: {
-              stepType,
-              isContinued,
-              toolCallsCount: toolCalls?.length || 0,
-              toolResultsCount: toolResults?.length || 0
-            }
-          });
+      // Broadcast live step for real-time updates
+      await this.insertLiveStep(
+        context.runId, 
+        currentStep, 
+        'ai_generation', 
+        'Starting AI execution...', 
+        stepMetadata
+      );
 
-          // Log individual tool calls
-          if (toolCalls && toolCalls.length > 0) {
-            for (const toolCall of toolCalls) {
-              executionLog.push({
-                stepNumber: stepNumber++,
-                stepType: 'tool_call',
-                timestamp: new Date().toISOString(),
-                toolCall: {
-                  toolCallId: toolCall.toolCallId,
-                  toolName: toolCall.toolName,
-                  arguments: toolCall.args
-                },
-                metadata: {
-                  toolCallType: 'initiated'
-                }
-              });
-            }
-          }
-
-          // Log individual tool results
-          if (toolResults && toolResults.length > 0) {
-            for (const toolResult of toolResults) {
-              const isError = toolResult.result instanceof Error || 
-                             (typeof toolResult.result === 'object' && toolResult.result?.error);
+      // Execute with AI using enhanced logging with retry logic
+      let result;
+      let retries = 3;
+      
+      while (retries > 0) {
+        try {
+          result = await generateText({
+            model: deepseek('deepseek-chat'),
+            system: systemPrompt,
+            prompt: userPrompt,
+            tools: {
+              ...tools,
+            },
+            maxSteps: 5, // Allow more steps for complex workflows
+            onStepFinish: async ({ text, toolCalls, toolResults, stepType, isContinued }) => {
+              // Log each step completion
+              const aiStepNumber = stepNumber++;
+              const aiStepMetadata = {
+                stepType,
+                isContinued,
+                toolCallsCount: toolCalls?.length || 0,
+                toolResultsCount: toolResults?.length || 0
+              };
               
               executionLog.push({
-                stepNumber: stepNumber++,
-                stepType: 'tool_result',
+                stepNumber: aiStepNumber,
+                stepType: 'ai_generation',
                 timestamp: new Date().toISOString(),
-                toolResult: {
-                  toolCallId: toolResult.toolCallId,
-                  result: toolResult.result,
-                  success: !isError,
-                  error: isError ? (toolResult.result instanceof Error ? toolResult.result.message : toolResult.result?.error) : undefined
-                },
-                metadata: {
-                  resultType: isError ? 'error' : 'success'
-                }
+                aiResponse: text,
+                metadata: aiStepMetadata
               });
-            }
-          }
 
-          console.log(`[WorkflowExecutor] Step ${stepNumber - 1} completed: ${text?.substring(0, 100)}...`);
-        },
-      });
+              // Broadcast AI generation step
+              await this.insertLiveStep(
+                context.runId,
+                aiStepNumber,
+                'ai_generation',
+                text,
+                aiStepMetadata
+              );
+
+              // Log individual tool calls
+              if (toolCalls && toolCalls.length > 0) {
+                for (const toolCall of toolCalls) {
+                  const toolCallStepNumber = stepNumber++;
+                  const toolCallMetadata = {
+                    toolCallType: 'initiated'
+                  };
+                  
+                  executionLog.push({
+                    stepNumber: toolCallStepNumber,
+                    stepType: 'tool_call',
+                    timestamp: new Date().toISOString(),
+                    toolCall: {
+                      toolCallId: toolCall.toolCallId,
+                      toolName: toolCall.toolName,
+                      arguments: toolCall.args
+                    },
+                    metadata: toolCallMetadata
+                  });
+
+                  // Broadcast tool call step
+                  await this.insertLiveStep(
+                    context.runId,
+                    toolCallStepNumber,
+                    'tool_call',
+                    `Calling ${toolCall.toolName}`,
+                    { 
+                      ...toolCallMetadata,
+                      toolName: toolCall.toolName,
+                      arguments: Object.keys(toolCall.args || {})
+                    }
+                  );
+                }
+              }
+
+              // Log individual tool results
+              if (toolResults && toolResults.length > 0) {
+                for (const toolResult of toolResults) {
+                  const isError = toolResult.result instanceof Error || 
+                                 (typeof toolResult.result === 'object' && toolResult.result?.error);
+                  
+                  const toolResultStepNumber = stepNumber++;
+                  const toolResultMetadata = {
+                    resultType: isError ? 'error' : 'success'
+                  };
+                  
+                  executionLog.push({
+                    stepNumber: toolResultStepNumber,
+                    stepType: 'tool_result',
+                    timestamp: new Date().toISOString(),
+                    toolResult: {
+                      toolCallId: toolResult.toolCallId,
+                      result: toolResult.result,
+                      success: !isError,
+                      error: isError ? (toolResult.result instanceof Error ? toolResult.result.message : toolResult.result?.error) : undefined
+                    },
+                    metadata: toolResultMetadata
+                  });
+
+                  // Broadcast tool result step
+                  const resultContent = isError 
+                    ? `Tool failed: ${toolResult.result instanceof Error ? toolResult.result.message : toolResult.result?.error}`
+                    : 'Tool executed successfully';
+                  
+                  await this.insertLiveStep(
+                    context.runId,
+                    toolResultStepNumber,
+                    'tool_result',
+                    resultContent,
+                    {
+                      ...toolResultMetadata,
+                      success: !isError,
+                      toolCallId: toolResult.toolCallId
+                    }
+                  );
+                }
+              }
+
+              console.log(`[WorkflowExecutor] Step ${stepNumber - 1} completed: ${text?.substring(0, 100)}...`);
+            },
+          });
+          break; // Success, exit retry loop
+        } catch (error) {
+          retries--;
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.log(`[WorkflowExecutor] API call failed (attempt ${4 - retries}/3):`, errorMessage);
+          
+          if (retries === 0) {
+            // Log the final retry failure
+            executionLog.push({
+              stepNumber: stepNumber++,
+              stepType: 'error',
+              timestamp: new Date().toISOString(),
+              error: `API call failed after 3 attempts: ${errorMessage}`,
+              metadata: {
+                errorType: 'api_failure',
+                finalAttempt: true
+              }
+            });
+            throw error; // Re-throw on final attempt
+          }
+          
+          // Log retry attempt
+          executionLog.push({
+            stepNumber: stepNumber++,
+            stepType: 'error',
+            timestamp: new Date().toISOString(),
+            error: `API call failed, retrying... (${4 - retries}/3): ${errorMessage}`,
+            metadata: {
+              errorType: 'api_retry',
+              remainingRetries: retries
+            }
+          });
+          
+          // Exponential backoff: wait 1s, then 2s, then 3s
+          const waitTime = (4 - retries) * 1000;
+          console.log(`[WorkflowExecutor] Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
 
       const executionTime = Date.now() - startTime;
 
+      // Ensure result is defined (should be after successful retry loop)
+      if (!result) {
+        throw new Error('AI execution failed: no result returned');
+      }
+
       // Log final AI completion
+      const completionStepNumber = stepNumber++;
+      const completionMetadata = {
+        action: 'ai_execution_complete',
+        totalSteps: result.steps?.length || 0,
+        finalResponse: result.text,
+        executionTime
+      };
+      
       executionLog.push({
-        stepNumber: stepNumber++,
+        stepNumber: completionStepNumber,
         stepType: 'ai_generation',
         timestamp: new Date().toISOString(),
         aiResponse: result.text,
-        metadata: {
-          action: 'ai_execution_complete',
-          totalSteps: result.steps?.length || 0,
-          finalResponse: result.text,
-          executionTime
-        }
+        metadata: completionMetadata
       });
+
+      // Broadcast completion step
+      await this.insertLiveStep(
+        context.runId,
+        completionStepNumber,
+        'completion',
+        `Workflow completed successfully in ${executionTime}ms`,
+        completionMetadata
+      );
 
       return {
         success: true,
@@ -348,17 +541,30 @@ export class WorkflowExecutor {
       console.error(`[WorkflowExecutor] AI execution failed:`, error);
       
       // Log AI execution error
+      const errorStepNumber = stepNumber++;
+      const errorMessage = error instanceof Error ? error.message : 'AI execution failed';
+      const errorMetadata = {
+        action: 'ai_execution_error',
+        executionTime,
+        stackTrace: error instanceof Error ? error.stack : undefined
+      };
+      
       executionLog.push({
-        stepNumber: stepNumber++,
+        stepNumber: errorStepNumber,
         stepType: 'error',
         timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : 'AI execution failed',
-        metadata: {
-          action: 'ai_execution_error',
-          executionTime,
-          stackTrace: error instanceof Error ? error.stack : undefined
-        }
+        error: errorMessage,
+        metadata: errorMetadata
       });
+
+      // Broadcast error step
+      await this.insertLiveStep(
+        context.runId,
+        errorStepNumber,
+        'error',
+        errorMessage,
+        errorMetadata
+      );
       
       return {
         success: false,
@@ -372,18 +578,18 @@ export class WorkflowExecutor {
   /**
    * Build system prompt for AI execution
    */
-  private buildSystemPrompt(workflow: Workflow, tools: any): string {
-    const toolNames = Object.keys(tools).join(', ');
+  private buildSystemPrompt(workflow: Workflow, tools: any, connectedToolkits: string[]): string {
+    const toolkitList = connectedToolkits.join(', ');
     
     return `You are an AI assistant executing a scheduled workflow named "${workflow.name}".
 
 WORKFLOW DESCRIPTION: ${workflow.description}
 
-AVAILABLE TOOLS: ${toolNames}
+AVAILABLE TOOLKITS: ${toolkitList}
 
 INSTRUCTIONS:
 1. Execute the workflow task described in the user prompt
-2. Use the available tools to complete the required actions
+2. Use the composio toolkit to retrieve information about the connected toolkits, and then create a plan using the search agent tool and/or the ask oracle tool available in composio. Then, based on the plan, use composio to execute the tools available in the connected toolkits.
 3. Provide detailed feedback about what you did, including:
    - Which tools you used and why
    - What actions were performed
@@ -391,7 +597,7 @@ INSTRUCTIONS:
    - Any issues encountered
 4. Be thorough in your explanation as this will be logged for the user
 5. If you cannot complete the task, explain why and what tools/permissions are needed
-6. Take your time to complete complex tasks - you have up to 10 steps available
+6. You have up to 5 steps available. Make sure to operate concisely and efficiently so all of the tasks get accomplished quickly and effectively.
 7. Use multiple tools in sequence if needed to accomplish the goal
 
 Remember: You are running automatically on a schedule, so the user is not actively monitoring this execution. Your response will be logged for later review.`;

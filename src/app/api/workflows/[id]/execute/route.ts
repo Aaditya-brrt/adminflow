@@ -29,13 +29,15 @@ export async function POST(
         message: 'Workflow executed successfully',
         output: result.output,
         toolCalls: result.toolCalls,
-        executionTime: result.executionTime
+        executionTime: result.executionTime,
+        runId: result.runId
       });
     } else {
       return NextResponse.json({
         success: false,
         error: result.error,
-        executionTime: result.executionTime
+        executionTime: result.executionTime,
+        runId: result.runId
       }, { status: 400 });
     }
     

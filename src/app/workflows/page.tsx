@@ -280,25 +280,25 @@ export default function WorkflowsListPage() {
 
           {activeTab === "Templates" && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {workflowTemplates.map((template) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {workflowTemplates.map((template) => (
                   <Card
-                    key={template.id}
+                  key={template.id}
                     className={`relative p-6 cursor-pointer hover:shadow-md transition-all ${selectedTemplate === template.id ? "border-primary" : ""}`}
                     onClick={() => setSelectedTemplate(template.id)}
-                  >
+                >
                     <Badge variant="outline" className="absolute top-4 right-4 text-xs">
-                      {template.popularity}
+                    {template.popularity}
                     </Badge>
                     <div className="flex items-center gap-2 mb-2">
                       {getWorkflowIcon(template.type)}
                       <div className="font-bold text-lg">{template.name}</div>
                     </div>
-                    <div className="text-sm text-muted-foreground mb-4 flex-1">{template.description}</div>
-                    <div className="flex gap-2 flex-wrap mt-auto">
-                      {template.services.map((service) => (
+                  <div className="text-sm text-muted-foreground mb-4 flex-1">{template.description}</div>
+                  <div className="flex gap-2 flex-wrap mt-auto">
+                    {template.services.map((service) => (
                         <Badge key={service} variant="secondary" className="text-xs">
-                          {service}
+                        {service}
                         </Badge>
                       ))}
                     </div>
@@ -418,7 +418,7 @@ export default function WorkflowsListPage() {
                           >
                             <Link href={`/workflows/${workflow.id}`}>
                               View
-                            </Link>
+                </Link>
                           </Button>
                           <Button
                             size="sm"
@@ -430,11 +430,11 @@ export default function WorkflowsListPage() {
                         </div>
                       </div>
                     </Card>
-                  ))}
-                </div>
-              )}
+              ))}
+            </div>
+          )}
               
-              <div className="flex justify-end gap-2 mt-8">
+          <div className="flex justify-end gap-2 mt-8">
                 <Button variant="outline" onClick={() => setActiveTab("Templates")}>
                   <Plus className="h-4 w-4 mr-2" />
                   Browse Templates
@@ -443,7 +443,7 @@ export default function WorkflowsListPage() {
                   <Plus className="h-4 w-4 mr-2" />
                   Create from Scratch
                 </Button>
-              </div>
+          </div>
             </>
           )}
         </div>
