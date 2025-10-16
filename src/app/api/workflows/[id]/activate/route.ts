@@ -86,20 +86,20 @@ export async function POST(
             trigger.trigger_name,
             {
               connectedAccountId: trigger.connected_account_id,
-              config: {
+              triggerConfig: {
                 ...trigger.trigger_config,
                 webhookUrl: webhookUrl
               }
             }
           );
 
-          console.log(`[Activate Workflow] Created trigger instance:`, triggerInstance.id);
+          console.log(`[Activate Workflow] Created trigger instance:`, triggerInstance.triggerId);
 
           // Update trigger in database with Composio trigger ID
           const { error: updateError } = await supabase
             .from('workflow_triggers')
             .update({
-              composio_trigger_id: triggerInstance.id,
+              composio_trigger_id: triggerInstance.triggerId,
               active: true,
               metadata: {
                 ...trigger.metadata,

@@ -83,19 +83,41 @@ export async function POST(request: NextRequest) {
       triggerName: trigger.trigger_name
     });
 
-    // Execute workflow with trigger payload as context
+    // Create workflow run with trigger context
+    const { data: workflowRun, error: runError } = await supabase
+      .from('workflow_runs')
+      .insert({
+        workflow_id: workflowId,
+        status: 'pending',
+        input_data: {
+          triggered_by: 'webhook',
+          trigger: {
+            id: trigger.id,
+            name: trigger.trigger_name,
+            toolkit: trigger.toolkit_slug,
+            payload: payload.payload || payload,
+            timestamp: new Date().toISOString()
+          }
+        }
+      })
+      .select()
+      .single();
+
+    if (runError || !workflowRun) {
+      console.error('[Composio Webhook] Failed to create workflow run:', runError);
+      return NextResponse.json(
+        {
+          status: 'error',
+          message: 'Failed to create workflow run',
+          error: runError?.message
+        },
+        { status: 200 }
+      );
+    }
+
+    // Execute workflow asynchronously - don't wait for completion
     const executor = new WorkflowExecutor(supabase);
-    
-    // Execute asynchronously - don't wait for completion
-    executor.executeWorkflow(workflowId, workflow.user_id, {
-      trigger: {
-        id: trigger.id,
-        name: trigger.trigger_name,
-        toolkit: trigger.toolkit_slug,
-        payload: payload.payload || payload,
-        timestamp: new Date().toISOString()
-      }
-    }).catch(error => {
+    executor.executeWorkflow(workflowId, workflow.user_id).catch(error => {
       console.error('[Composio Webhook] Workflow execution error:', error);
     });
 
