@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Calendar, Mail, Clock, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { CreateWorkflowRequest } from "@/lib/service/workflow";
+import { TriggerSelector } from "@/components/workflows/TriggerSelector";
+import { WorkflowTrigger } from "@/types/triggers";
 
 interface CreateWorkflowModalProps {
   open: boolean;
@@ -23,6 +25,7 @@ export function CreateWorkflowModal({ open, onOpenChange, onWorkflowCreated }: C
   const [automationType, setAutomationType] = useState<"schedule" | "trigger">("schedule");
   const [scheduleType, setScheduleType] = useState("day");
   const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [selectedTriggers, setSelectedTriggers] = useState<Array<Omit<WorkflowTrigger, 'id' | 'workflow_id' | 'user_id' | 'created_at' | 'updated_at'>>>([]);
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
 
@@ -32,7 +35,16 @@ export function CreateWorkflowModal({ open, onOpenChange, onWorkflowCreated }: C
     setAutomationType("schedule");
     setScheduleType("day");
     setScheduleTime("09:00");
+    setSelectedTriggers([]);
     onOpenChange(false);
+  };
+
+  const handleTriggerAdd = (trigger: Omit<WorkflowTrigger, 'id' | 'workflow_id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+    setSelectedTriggers(prev => [...prev, trigger]);
+  };
+
+  const handleTriggerRemove = (index: number) => {
+    setSelectedTriggers(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleCreateWorkflow = async () => {
@@ -49,6 +61,15 @@ export function CreateWorkflowModal({ open, onOpenChange, onWorkflowCreated }: C
       toast({
         title: "Error",
         description: "Please enter a workflow description.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (automationType === "trigger" && selectedTriggers.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one trigger for trigger-based workflows.",
         variant: "destructive",
       });
       return;
@@ -88,6 +109,24 @@ export function CreateWorkflowModal({ open, onOpenChange, onWorkflowCreated }: C
       }
 
       const workflow = await response.json();
+      
+      // If trigger-based workflow, create triggers
+      if (automationType === "trigger" && selectedTriggers.length > 0) {
+        for (const trigger of selectedTriggers) {
+          try {
+            await fetch(`/api/workflows/${workflow.id}/triggers`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(trigger),
+            });
+          } catch (error) {
+            console.error('Error creating trigger:', error);
+            // Continue with other triggers even if one fails
+          }
+        }
+      }
       
       toast({
         title: "Success",
@@ -213,14 +252,44 @@ export function CreateWorkflowModal({ open, onOpenChange, onWorkflowCreated }: C
 
             {/* Trigger Details */}
             {automationType === "trigger" && (
-              <div className="bg-muted/50 rounded-lg p-4">
-                <div className="flex items-center space-x-2 text-sm mb-3">
-                  <Mail className="h-4 w-4" />
-                  <span>Event-based trigger</span>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Configure triggers after creating the workflow
-                </div>
+              <div className="space-y-4">
+                <TriggerSelector
+                  onTriggerAdd={handleTriggerAdd}
+                  existingTriggers={selectedTriggers}
+                  disabled={isCreating}
+                />
+                
+                {/* Selected Triggers */}
+                {selectedTriggers.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium">
+                      Selected Triggers ({selectedTriggers.length})
+                    </label>
+                    {selectedTriggers.map((trigger, index) => (
+                      <div key={index} className="flex items-center justify-between bg-muted/50 rounded-lg p-3">
+                        <div className="flex items-center space-x-2">
+                          <Mail className="h-4 w-4" />
+                          <div>
+                            <div className="text-sm font-medium">
+                              {trigger.metadata?.trigger_display_name || trigger.trigger_name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {trigger.metadata?.toolkit_display_name || trigger.toolkit_slug}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleTriggerRemove(index)}
+                          disabled={isCreating}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

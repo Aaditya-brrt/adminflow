@@ -7,10 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWorkflow } from "@/hooks/useWorkflows";
+import { useWorkflowTriggers } from "@/hooks/useWorkflowTriggers";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Calendar, Mail, Clock, ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { TriggerSelector } from "@/components/workflows/TriggerSelector";
+import { TriggerList } from "@/components/workflows/TriggerList";
+import { WorkflowTrigger } from "@/types/triggers";
 
 export default function WorkflowEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
@@ -18,6 +22,7 @@ export default function WorkflowEditPage({ params }: { params: Promise<{ id: str
   const { toast } = useToast();
   
   const { workflow, loading, error } = useWorkflow(id);
+  const { triggers, loading: triggersLoading, createTrigger, deleteTrigger, fetchTriggers } = useWorkflowTriggers(id);
   
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -46,6 +51,40 @@ export default function WorkflowEditPage({ params }: { params: Promise<{ id: str
       }
     }
   }, [workflow]);
+
+  const handleTriggerAdd = async (trigger: Omit<WorkflowTrigger, 'id' | 'workflow_id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+    const result = await createTrigger({
+      toolkit_slug: trigger.toolkit_slug,
+      trigger_name: trigger.trigger_name,
+      trigger_config: trigger.trigger_config,
+      connected_account_id: trigger.connected_account_id,
+      metadata: trigger.metadata
+    });
+
+    if (result) {
+      toast({
+        title: "Success",
+        description: "Trigger added successfully",
+      });
+    }
+  };
+
+  const handleTriggerDelete = async (triggerId: string) => {
+    const success = await deleteTrigger(triggerId);
+    
+    if (success) {
+      toast({
+        title: "Success",
+        description: "Trigger removed successfully",
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: "Failed to remove trigger",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSaveWorkflow = async () => {
     if (!title.trim()) {
@@ -253,14 +292,44 @@ export default function WorkflowEditPage({ params }: { params: Promise<{ id: str
 
                 {/* Trigger Details */}
                 {automationType === "trigger" && (
-                  <div className="bg-muted/50 rounded-lg p-4">
-                    <div className="flex items-center space-x-2 text-sm mb-3">
-                      <Mail className="h-4 w-4" />
-                      <span>Event-based trigger</span>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Configured Triggers
+                      </label>
+                      <TriggerList
+                        triggers={triggers}
+                        onDelete={handleTriggerDelete}
+                        loading={triggersLoading}
+                      />
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Trigger configuration is managed separately
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Add New Trigger
+                      </label>
+                      <TriggerSelector
+                        onTriggerAdd={handleTriggerAdd}
+                        existingTriggers={triggers.map(t => ({
+                          toolkit_slug: t.toolkit_slug,
+                          trigger_name: t.trigger_name,
+                          trigger_config: t.trigger_config,
+                          connected_account_id: t.connected_account_id,
+                          active: t.active,
+                          metadata: t.metadata
+                        }))}
+                        disabled={isSaving}
+                      />
                     </div>
+
+                    {workflow.webhook_url && (
+                      <div className="bg-muted/50 rounded-lg p-3">
+                        <div className="text-xs font-medium mb-1">Webhook URL</div>
+                        <div className="text-xs text-muted-foreground break-all">
+                          {workflow.webhook_url}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

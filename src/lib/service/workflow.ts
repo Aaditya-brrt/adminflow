@@ -10,6 +10,7 @@ export interface Workflow {
   active: boolean;
   schedule_config?: Record<string, any>;
   trigger_config?: Record<string, any>;
+  webhook_url?: string;
   metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -211,31 +212,6 @@ export class WorkflowService {
     }
   }
 
-  async activateWorkflow(workflowId: string): Promise<Workflow> {
-    const workflow = await this.getWorkflow(workflowId);
-    if (!workflow) {
-      throw new Error('Workflow not found');
-    }
-
-    // Calculate next run time if it's a schedule-based workflow
-    let nextRunAt: string | undefined;
-    if (workflow.type === 'schedule' && workflow.schedule_config) {
-      nextRunAt = this.calculateNextRunTime(workflow.schedule_config);
-    }
-
-    return this.updateWorkflow(workflowId, {
-      active: true,
-      next_run_at: nextRunAt
-    });
-  }
-
-  async deactivateWorkflow(workflowId: string): Promise<Workflow> {
-    return this.updateWorkflow(workflowId, {
-      active: false,
-      next_run_at: undefined
-    });
-  }
-
   async createWorkflowRun(workflowId: string, inputData?: Record<string, any>): Promise<WorkflowRun> {
     const { data, error } = await this.supabase
       .from('workflow_runs')
@@ -388,6 +364,93 @@ export class WorkflowService {
       return description.trim();
     }
     return words.slice(0, 4).join(' ') + '...';
+  }
+
+  /**
+   * Get all triggers for a workflow
+   */
+  async getWorkflowTriggers(workflowId: string) {
+    const { data, error } = await this.supabase
+      .from('workflow_triggers')
+      .select('*')
+      .eq('workflow_id', workflowId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to fetch workflow triggers: ${error.message}`);
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Activate a workflow and all its triggers
+   */
+  async activateWorkflow(workflowId: string): Promise<void> {
+    const { data: { user }, error: authError } = await this.supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('User not authenticated');
+    }
+
+    // Update workflow to active
+    const { error: workflowError } = await this.supabase
+      .from('workflows')
+      .update({ active: true })
+      .eq('id', workflowId)
+      .eq('user_id', user.id);
+
+    if (workflowError) {
+      throw new Error(`Failed to activate workflow: ${workflowError.message}`);
+    }
+
+    // Activate all triggers via API
+    const response = await fetch(`/api/workflows/${workflowId}/activate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ active: true }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to activate workflow triggers');
+    }
+  }
+
+  /**
+   * Deactivate a workflow and all its triggers
+   */
+  async deactivateWorkflow(workflowId: string): Promise<void> {
+    const { data: { user }, error: authError } = await this.supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('User not authenticated');
+    }
+
+    // Update workflow to inactive
+    const { error: workflowError } = await this.supabase
+      .from('workflows')
+      .update({ active: false })
+      .eq('id', workflowId)
+      .eq('user_id', user.id);
+
+    if (workflowError) {
+      throw new Error(`Failed to deactivate workflow: ${workflowError.message}`);
+    }
+
+    // Deactivate all triggers via API
+    const response = await fetch(`/api/workflows/${workflowId}/activate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ active: false }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to deactivate workflow triggers');
+    }
   }
 }
 
